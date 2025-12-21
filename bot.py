@@ -9,6 +9,7 @@ bot = telebot.TeleBot(TOKEN)
 user_referrals = {}
 
 
+# 🔹 Kanalga obuna tekshirish
 def check_sub(user_id):
     try:
         m = bot.get_chat_member(CHANNEL_USERNAME, user_id)
@@ -17,10 +18,12 @@ def check_sub(user_id):
         return False
 
 
+# 🔹 /start komandasi
 @bot.message_handler(commands=["start"])
 def start(msg):
     user_id = msg.from_user.id
 
+    # Referral
     if len(msg.text.split()) > 1:
         try:
             user_referrals[user_id] = int(msg.text.split()[1])
@@ -28,11 +31,13 @@ def start(msg):
             pass
 
     text = (
-        f"Konkursga qatnashish uchun pastda so’ralgan ma’lumotlarni yuboring va aytilgan amallarni bajaring. Onlayn taqdimot kanalga qo’shilib 📱Televizor, Muzlatgich  va boshqa   sovg'alardan birini yutib oling 🎁\n"
+        f"Konkursga qatnashish uchun pastda so’ralgan ma’lumotlarni yuboring va aytilgan amallarni bajaring. "
+        "Onlayn taqdimot kanalga qo’shilib 📱Televizor, Muzlatgich  va boshqa sovg'alardan birini yutib oling 🎁\n"
         "Qani kettik!!!\n\n"
         f"Birinchi navbatda kanalga qo'shiling va Bajarildi ✅ tugmasini bosing"
     )
 
+    # Kanalga obuna bo‘lmaganlar
     if not check_sub(user_id):
         kb = types.InlineKeyboardMarkup()
         kb.add(
@@ -45,6 +50,7 @@ def start(msg):
             bot.send_photo(msg.chat.id, photo, caption=text, reply_markup=kb)
         return
 
+    # Agar user bazada bo‘lsa
     if user_exists(user_id):
         menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
         menu.add("🔗 Mening havolam", "💰 Mening hisobim")
@@ -54,11 +60,13 @@ def start(msg):
         )
         return
 
+    # Telefon so‘rash
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add(types.KeyboardButton("📞 Telefon yuborish", request_contact=True))
     bot.send_message(msg.chat.id, "📞 Telefon raqamingizni yuboring", reply_markup=kb)
 
 
+# 🔹 Callback check
 @bot.callback_query_handler(func=lambda c: c.data == "check")
 def check(call):
     uid = call.from_user.id
@@ -69,19 +77,16 @@ def check(call):
         )
         return
 
-    # agar hali bazada bo‘lmasa
     if not user_exists(uid):
         ref = user_referrals.get(uid)
         add_user(uid, None, ref)
-
         if ref and ref != uid:
             add_score(ref)
-
         mark_joined(uid)
 
     bot.answer_callback_query(call.id, "✅ Obuna tasdiqlandi")
 
-    # ✅ TO‘G‘RIDAN-TO‘G‘RI MENU
+    # Menu ko‘rsatish
     menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
     menu.add("🔗 Mening havolam", "💰 Mening hisobim")
     menu.add("📘 Qo‘llanma")
@@ -93,21 +98,17 @@ def check(call):
     )
 
 
+# 🔹 Telefon raqami
 @bot.message_handler(content_types=["contact"])
 def phone(msg):
     add_user(msg.from_user.id, msg.contact.phone_number)
-
     menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
     menu.add("🔗 Mening havolam", "💰 Mening hisobim")
     menu.add("📘 Qo‘llanma")
-    phone_text = (
-        f"Juda yaxshi!\n"
-        f"Sizga bog'lana olishim uchun pastdagi “📲 Raqamni ulashish” tugmasini bosib telefon raqamingizni yuboring yoki raqamingizni 99******* kabi yozib yuboring."
-    )
-
     bot.send_message(msg.chat.id, "✅ Ro‘yxatdan o‘tdingiz", reply_markup=menu)
 
 
+# 🔹 Mening havolam
 @bot.message_handler(func=lambda m: m.text == "🔗 Mening havolam")
 def my_link(msg):
     uid = msg.from_user.id
@@ -117,15 +118,9 @@ def my_link(msg):
         f"📢 🥳 Namanganliklar uchun Afsona city kompaniyasidan KATTA YANGILIK tayyorlaganmiz.\n\n"
         "🤫 Yaqin kunlarda, aynan shu telegram kanalimizda barchasini sizlarga e'lon qilamiz.\n\n"
         "✈️ Siz esa kanalga obuna bo'ling va barcha Namanganlik yaqinlaringizni kanalimizga taklif qiling.\n\n"
-        "Bundan tashqari kanalga odam qo’shi b, uy xarid qilmasdanham Televizor, Muzlatgich yoki boshqa sovg’alardan birini yutib olishingiz mumkin!\n\n"
+        "Bundan tashqari kanalga odam qo’shish orqali Televizor, Muzlatgich yoki boshqa sovg’alardan birini yutib olishingiz mumkin!\n\n"
         "Qatnashish uchun quyidagi havola orqali o’ting 👇👇👇\n"
         f"🔗 Sizning referal havolangiz:\n{link}"
-    )
-    text_2 = (
-        f"Yuqoridagi postda sizning maxsus linkingiz joylashgan.\n\n "
-        "Bu postni yaqinglaringizga tarqating va kanalga siz orqali har bir qo’shilgan do’stingizni shu bot hisoblab boradi.\n\n"
-        "Qancha odam qo’shganingizni “Mening hisobim ✅” tugmasini bosish orqali bilib borsangiz bo’ladi.\n\n "
-        f"Sizga omad tilaymiz. Eng katta sovg’ani yutib olish sizga nasib etsin😊\n\n"
     )
 
     kb = types.InlineKeyboardMarkup()
@@ -135,11 +130,13 @@ def my_link(msg):
         bot.send_photo(msg.chat.id, photo, caption=text, reply_markup=kb)
 
 
+# 🔹 Mening hisobim
 @bot.message_handler(func=lambda m: m.text == "💰 Mening hisobim")
 def my_score(msg):
     bot.send_message(msg.chat.id, f"💰 Sizning balingiz: {get_score(msg.from_user.id)}")
 
 
+# 🔹 Admin
 @bot.message_handler(commands=["admin"])
 def admin(msg):
     bot.send_message(msg.chat.id, "🔑 Parolni kiriting")
@@ -153,6 +150,7 @@ def check_admin(msg):
         bot.send_message(msg.chat.id, "👑 Admin panel", reply_markup=kb)
 
 
+# 🔹 Top 100
 @bot.message_handler(func=lambda m: m.text == "🏆 Top 100")
 def top100(msg):
     data = get_top_100()
@@ -162,12 +160,13 @@ def top100(msg):
     bot.send_message(msg.chat.id, text)
 
 
+# 🔹 Qo‘llanma
 @bot.message_handler(func=lambda m: m.text == "📘 Qo‘llanma")
 def guide(msg):
     bot.send_message(
         msg.chat.id,
         "❓ Tanishlarni qanday qo‘shish kerak va ballar qanday hisoblanadi?\n\n"
-        "👥 Sizga berilgan shaxsiy link orqali kanalga qo‘shilgan har bir  tanishingiz uchun sizga +1 ball beriladi.\n\n"
+        "👥 Sizga berilgan shaxsiy link orqali kanalga qo‘shilgan har bir tanishingiz uchun sizga +1 ball beriladi.\n\n"
         "📌 O‘yinni muvaffaqiyatli o‘tish uchun menyudagi bo‘limlardan yoki pastdagi tugmalardan foydalaning.\n"
         "Faollik ko‘rsating, vazifalarni bajaring va sovg‘alarni qo‘lga kiriting! 🎁\n\n"
         "🔗 Tanishlarni taklif qilish uchun:\n"
@@ -177,6 +176,7 @@ def guide(msg):
     )
 
 
+# 🔹 PDF
 @bot.message_handler(func=lambda m: m.text == "📄 PDF chiqarish")
 def pdf(msg):
     data = get_active_users()
@@ -189,4 +189,7 @@ def pdf(msg):
     bot.send_document(msg.chat.id, open("rating.pdf", "rb"))
 
 
-bot.infinity_polling()
+# 🔹 Infinity polling (409 xatoni oldini olish uchun)
+if __name__ == "__main__":
+    print("Bot ishga tushdi...")
+    bot.infinity_polling(skip_pending=True, timeout=60)
