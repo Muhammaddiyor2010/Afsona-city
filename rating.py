@@ -4,7 +4,7 @@ from datetime import datetime
 from telebot import types
 
 DB_NAME = "users.db"
-ADMIN_PHONE = "+998901234567"  # o'zingizning admin raqamingiz
+ADMIN_PHONE = "+998931981793"  # o'zingizning admin raqamingiz
 ADMIN_SESSIONS = set()  # vaqtinchalik adminlar
 
 # 🔹 DB bilan ishlash
