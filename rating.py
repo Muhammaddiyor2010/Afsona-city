@@ -4,7 +4,7 @@ from datetime import datetime
 from telebot import types
 
 DB_NAME = "users.db"
-ADMIN_PHONES = ["+998901234567", "+998909876543"]  # Bir nechta admin
+ADMIN_PHONES = ["+998931981793", "+998200050252","+998908551141"]  # Bir nechta admin
 ADMIN_SESSIONS = set()
 
 
