@@ -5,7 +5,7 @@ from db import *
 from rating import *
 from reportlab.pdfgen import canvas
 from rating import get_top_100, get_active_users, generate_rating_pdf
-from admin import admin_start, admin_handlers
+
 
 admin_start(bot)
 admin_handlers(bot)
