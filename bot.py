@@ -4,6 +4,8 @@ from config import *
 from db import *
 from rating import *
 from reportlab.pdfgen import canvas
+from rating import get_top_100, get_active_users, generate_rating_pdf
+
 
 bot = telebot.TeleBot(TOKEN)
 user_referrals = {}
