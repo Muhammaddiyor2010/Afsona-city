@@ -5,7 +5,6 @@ from telebot import types
 
 DB_NAME = "users.db"
 
-# 📞 Admin telefonlari (2 ta yoki ko‘p bo‘lishi mumkin)
 ADMIN_PHONES = [
     "+998931981793",
     "+998200050252",
@@ -15,99 +14,83 @@ ADMIN_PHONES = [
 ADMIN_SESSIONS = set()
 
 
-# ===================== DB =====================
-
+# ================= DB =================
 def get_connection():
     return sqlite3.connect(DB_NAME, check_same_thread=False)
 
 
-def ensure_username_column():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(users)")
-    cols = [c[1] for c in cursor.fetchall()]
-    if "username" not in cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
-    conn.commit()
-    conn.close()
-
-
-ensure_username_column()
-
-
-# ===================== RATING =====================
-
 def get_top_100():
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
+    cur = conn.cursor()
+    cur.execute("""
         SELECT user_id, score
         FROM users
         WHERE score > 0
         ORDER BY score DESC
         LIMIT 100
     """)
-    data = cursor.fetchall()
+    data = cur.fetchall()
     conn.close()
     return data
 
 
 def get_active_users():
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
+    cur = conn.cursor()
+    cur.execute("""
         SELECT user_id, score
         FROM users
         WHERE score > 0
         ORDER BY score DESC
     """)
-    data = cursor.fetchall()
+    data = cur.fetchall()
     conn.close()
     return data
 
 
-# ===================== PDF =====================
-
+# ================= PDF =================
 def generate_rating_pdf(data, title):
-    filename = "rating.pdf"
-    pdf = canvas.Canvas(filename)
+    file_name = "rating.pdf"
+    pdf = canvas.Canvas(file_name)
+
     pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawString(180, 820, title)
+    pdf.drawString(200, 820, title)
 
     pdf.setFont("Helvetica", 10)
     pdf.drawString(50, 800, f"Sana: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
-    y = 770
+    y = 760
     total = 0
-
     pdf.setFont("Helvetica", 11)
-    for i, (user_id, score) in enumerate(data, 1):
-        pdf.drawString(50, y, f"{i}. ID: {user_id} | Ball: {score}")
-        total += score
+
+    for i, (uid, score) in enumerate(data, 1):
+        pdf.drawString(50, y, f"{i}. ID: {uid} | Ball: {score}")
         y -= 18
-        if y < 60:
+        total += score
+
+        if y < 50:
             pdf.showPage()
             pdf.setFont("Helvetica", 11)
             y = 800
 
     pdf.drawString(50, y - 20, f"JAMI BALL: {total}")
     pdf.save()
-    return filename
+    return file_name
 
 
-# ===================== ADMIN =====================
-
+# ================= ADMIN =================
 def is_admin(user_id):
     return user_id in ADMIN_SESSIONS
 
 
 def show_admin_panel(bot, msg):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("🏆 Top 100", "👥 Faol foydalanuvchilar")
+    kb.add("🏆 Top 100", "👥 Faol ishtirokchilar")
     kb.add("📄 Top 100 PDF", "📄 Faollar PDF")
-    kb.add("📩 1 kishiga xabar")
-    kb.add("📢 Reklama (hammaga)")
+    kb.add("🔍 ID orqali tekshirish")
+    kb.add("📩 1 kishiga xabar", "📢 Reklama yuborish")
     kb.add("⬅️ Chiqish")
+
     bot.send_message(
         msg.chat.id,
         "🛠 <b>Admin panel</b>",
@@ -116,10 +99,7 @@ def show_admin_panel(bot, msg):
     )
 
 
-# ===================== ADMIN LOGIN =====================
-
 def admin_start(bot):
-
     @bot.message_handler(commands=["admin"])
     def admin_login(msg):
         kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
@@ -143,118 +123,159 @@ def admin_start(bot):
             bot.send_message(msg.chat.id, "❌ Siz admin emassiz")
 
 
-# ===================== ADMIN HANDLERS =====================
-
+# ================= HANDLERS =================
 def admin_handlers(bot):
 
-    # 🏆 TOP 100
     @bot.message_handler(func=lambda m: m.text == "🏆 Top 100")
     def top100(msg):
         if not is_admin(msg.from_user.id):
             return
         data = get_top_100()
         if not data:
-            bot.send_message(msg.chat.id, "Reyting hali yo‘q")
+            bot.send_message(msg.chat.id, "❌ Reyting yo‘q")
             return
 
         text = "🏆 <b>TOP 100</b>\n\n"
         for i, (uid, score) in enumerate(data, 1):
-            text += f"{i}. ID: <code>{uid}</code> — {score} ball\n"
+            text += f"{i}. <code>{uid}</code> — {score} ball\n"
 
         bot.send_message(msg.chat.id, text, parse_mode="HTML")
 
-    # 👥 FAOL
-    @bot.message_handler(func=lambda m: m.text == "👥 Faol foydalanuvchilar")
-    def active(msg):
+
+    @bot.message_handler(func=lambda m: m.text == "👥 Faol ishtirokchilar")
+    def active_users(msg):
         if not is_admin(msg.from_user.id):
             return
-        data = get_active_users()
-        bot.send_message(msg.chat.id, f"👥 Faol foydalanuvchilar: {len(data)} ta")
 
-    # 📄 PDF
+        data = get_active_users()
+        text = "👥 <b>Faol foydalanuvchilar</b>\n\n"
+
+        for i, (uid, score) in enumerate(data, 1):
+            text += f"{i}. <code>{uid}</code> — {score} ball\n"
+
+        bot.send_message(msg.chat.id, text, parse_mode="HTML")
+
+
     @bot.message_handler(func=lambda m: m.text == "📄 Top 100 PDF")
     def top_pdf(msg):
         if not is_admin(msg.from_user.id):
             return
-        file = generate_rating_pdf(get_top_100(), "TOP 100 REYTING")
+        file = generate_rating_pdf(get_top_100(), "Top 100 Reyting")
         with open(file, "rb") as f:
             bot.send_document(msg.chat.id, f)
+
 
     @bot.message_handler(func=lambda m: m.text == "📄 Faollar PDF")
     def active_pdf(msg):
         if not is_admin(msg.from_user.id):
             return
-        file = generate_rating_pdf(get_active_users(), "FAOL FOYDALANUVCHILAR")
+        file = generate_rating_pdf(get_active_users(), "Faol foydalanuvchilar")
         with open(file, "rb") as f:
             bot.send_document(msg.chat.id, f)
 
-    # ================== 1 USERGA XABAR ==================
+
+    @bot.message_handler(func=lambda m: m.text == "🔍 ID orqali tekshirish")
+    def ask_id(msg):
+        if not is_admin(msg.from_user.id):
+            return
+        bot.send_message(msg.chat.id, "ID kiriting:")
+        bot.register_next_step_handler(msg, lambda m: find_user_info(bot, m))
+
 
     @bot.message_handler(func=lambda m: m.text == "📩 1 kishiga xabar")
     def one_user(msg):
         if not is_admin(msg.from_user.id):
             return
-        bot.send_message(msg.chat.id, "👤 Username kiriting (@sizsiz):")
-        bot.register_next_step_handler(msg, get_username)
+        bot.send_message(msg.chat.id, "👤 User ID kiriting:")
+        bot.register_next_step_handler(msg, ask_single_message)
 
-    def get_username(msg):
-        username = msg.text.replace("@", "").strip()
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM users WHERE username=?", (username,))
-        row = cursor.fetchone()
-        conn.close()
 
-        if not row:
-            bot.send_message(msg.chat.id, "❌ Bu user botga /start bosmagan")
-            return
-
-        user_id = row[0]
-        bot.send_message(msg.chat.id, "✉️ Xabar matnini yuboring:")
-        bot.register_next_step_handler(msg, send_one, user_id, username)
-
-    def send_one(msg, user_id, username):
-        try:
-            bot.send_message(user_id, msg.text)
-            bot.send_message(msg.chat.id, f"✅ @{username} ga yuborildi")
-        except:
-            bot.send_message(msg.chat.id, f"❌ @{username} ga bormadi")
-
-    # ================== HAMMAGA REKLAMA ==================
-
-    @bot.message_handler(func=lambda m: m.text == "📢 Reklama (hammaga)")
-    def ads(msg):
+    @bot.message_handler(func=lambda m: m.text == "📢 Reklama yuborish")
+    def broadcast(msg):
         if not is_admin(msg.from_user.id):
             return
-        bot.send_message(msg.chat.id, "📢 Reklama matnini yuboring:")
-        bot.register_next_step_handler(msg, send_ads)
+        bot.send_message(msg.chat.id, "📢 Reklama xabarini yuboring")
+        bot.register_next_step_handler(msg, lambda m: broadcast_message(bot, m))
 
-    def send_ads(msg):
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM users")
-        users = cursor.fetchall()
-        conn.close()
 
-        ok = 0
-        fail = 0
-
-        for (uid,) in users:
-            try:
-                bot.send_message(uid, msg.text)
-                ok += 1
-            except:
-                fail += 1
-
-        bot.send_message(
-            msg.chat.id,
-            f"📊 Reklama yakuni:\n\n"
-            f"✅ BordI: {ok}\n"
-            f"❌ Bormadi: {fail}"
-        )
-
-    # 🚪 CHIQISH
     @bot.message_handler(func=lambda m: m.text == "⬅️ Chiqish")
     def exit_admin(msg):
         ADMIN_SESSIONS.discard(msg.from_user.id)
         bot.send_message(msg.chat.id, "🚪 Admin paneldan chiqildi")
+
+
+# ================= EXTRA =================
+def find_user_info(bot, msg):
+    try:
+        user_id = int(msg.text)
+    except:
+        bot.send_message(msg.chat.id, "❌ ID noto‘g‘ri")
+        return
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("PRAGMA table_info(users)")
+    cols = [c[1] for c in cur.fetchall()]
+    if "username" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN username TEXT")
+    if "phone" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+    conn.commit()
+
+    cur.execute("SELECT username, phone FROM users WHERE user_id=?", (user_id,))
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        bot.send_message(msg.chat.id, "❌ Bunday ID yo‘q")
+        return
+
+    username, phone = row
+    bot.send_message(
+        msg.chat.id,
+        f"ID: {user_id}\nUsername: {username}\nTelefon: {phone}"
+    )
+
+
+def ask_single_message(msg):
+    try:
+        uid = int(msg.text)
+    except:
+        msg.bot.send_message(msg.chat.id, "❌ ID xato")
+        return
+
+    msg.bot.send_message(msg.chat.id, "✍️ Xabar yuboring")
+    msg.bot.register_next_step_handler(
+        msg,
+        lambda m: send_single(msg.bot, m, uid)
+    )
+
+
+def send_single(bot, msg, user_id):
+    try:
+        bot.copy_message(user_id, msg.chat.id, msg.message_id)
+        bot.send_message(msg.chat.id, "✅ Xabar yuborildi")
+    except:
+        bot.send_message(msg.chat.id, "❌ Yuborilmadi")
+
+
+def broadcast_message(bot, msg):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT user_id FROM users")
+    users = cur.fetchall()
+    conn.close()
+
+    ok, fail = 0, 0
+    for (uid,) in users:
+        try:
+            bot.copy_message(uid, msg.chat.id, msg.message_id)
+            ok += 1
+        except:
+            fail += 1
+
+    bot.send_message(
+        msg.chat.id,
+        f"📊 Yakun:\n✅ {ok}\n❌ {fail}"
+    )
