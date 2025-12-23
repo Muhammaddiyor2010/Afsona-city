@@ -258,4 +258,3 @@ def admin_handlers(bot):
     def exit_admin(msg):
         ADMIN_SESSIONS.discard(msg.from_user.id)
         bot.send_message(msg.chat.id, "🚪 Admin paneldan chiqildi")
-Объяснить
