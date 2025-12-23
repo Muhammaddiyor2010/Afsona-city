@@ -4,7 +4,7 @@ from datetime import datetime
 from telebot import types, TeleBot
 
 # ===================== SOZLAMALAR =====================
-TOKEN = "SIZNING_BOT_TOKENINGIZ_BU_YERDA" # 👈 Tokenni shu yerga yozing
+TOKEN = "8011686611:AAHuyfCBOPdNkQQ-hPpy7E2Ju3wZX__ExMU" # 👈 Tokenni shu yerga yozing
 bot = TeleBot(TOKEN)
 
 DB_NAME = "users.db"
