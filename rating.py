@@ -4,7 +4,7 @@ from datetime import datetime
 from telebot import types
 
 DB_NAME = "users.db"
-ADMIN_PHONE = "+998931981793"  # 2 ta admin raqam # O'zingizning admin raqamingiz
+ADMIN_PHONES = ["+998901234567", "+998909876543"]  # Bir nechta admin
 ADMIN_SESSIONS = set()
 
 
@@ -17,7 +17,7 @@ def get_top_100():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT user_id, username, score
+        SELECT user_id, score
         FROM users
         WHERE score > 0
         ORDER BY score DESC
@@ -32,7 +32,7 @@ def get_active_users():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT user_id, username, score
+        SELECT user_id, score
         FROM users
         WHERE score > 0
         ORDER BY score DESC
@@ -57,8 +57,8 @@ def generate_rating_pdf(data, title="Reyting"):
     pdf.setFont("Helvetica", 11)
     total_score = 0
 
-    for i, (user_id, username, score) in enumerate(data, start=1):
-        pdf.drawString(50, y, f"{i}. ID: {user_id} | Username: {username} | Ball: {score}")
+    for i, (user_id, score) in enumerate(data, start=1):
+        pdf.drawString(50, y, f"{i}. ID: {user_id} | Ball: {score}")
         y -= 18
         total_score += score
         if y < 50:
@@ -81,7 +81,7 @@ def show_admin_panel(bot, msg):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add("🏆 Top 100", "👥 Faol ishtirokchilar")
     kb.add("📄 Top 100 PDF", "📄 Faollar PDF")
-    kb.add("🔍 ID orqali username", "⬅️ Chiqish")
+    kb.add("🔍 ID orqali ball", "⬅️ Chiqish")
     bot.send_message(msg.chat.id, "🛠 <b>Admin panel</b>", reply_markup=kb, parse_mode="HTML")
 
 
@@ -99,7 +99,7 @@ def admin_start(bot):
         phone = msg.contact.phone_number
         if phone.startswith("998"):
             phone = "+" + phone
-        if phone == ADMIN_PHONE:
+        if phone in ADMIN_PHONES:
             ADMIN_SESSIONS.add(msg.from_user.id)
             show_admin_panel(bot, msg)
         else:
@@ -118,8 +118,8 @@ def admin_handlers(bot):
             bot.send_message(msg.chat.id, "Reyting hali yo‘q")
             return
         text = "🏆 <b>TOP 100</b>\n\n"
-        for i, (uid, username, score) in enumerate(data, 1):
-            text += f"{i}. ID: <code>{uid}</code> — {score} ball | Username: {username}\n"
+        for i, (uid, score) in enumerate(data, 1):
+            text += f"{i}. ID: <code>{uid}</code> — {score} ball\n"
         bot.send_message(msg.chat.id, text, parse_mode="HTML")
 
     # Faol foydalanuvchilar
@@ -150,28 +150,31 @@ def admin_handlers(bot):
         with open(file, "rb") as f:
             bot.send_document(msg.chat.id, f)
 
-    # ID orqali username
-    @bot.message_handler(func=lambda m: m.text == "🔍 ID orqali username")
+    # ID orqali ball
+    @bot.message_handler(func=lambda m: m.text == "🔍 ID orqali ball")
     def search_id(msg):
         if not is_admin(msg.from_user.id):
             return
-        bot.send_message(msg.chat.id, "🔍 ID kiriting:")
-        bot.register_next_step_handler(msg, find_username)
+        bot.send_message(msg.chat.id, "🔍 ID kiriting (bir nechta bo‘lishi mumkin, bo‘sh joy bilan ajrating):")
+        bot.register_next_step_handler(msg, find_score)
 
-    def find_username(msg):
+    def find_score(msg):
         try:
-            user_id = int(msg.text)
+            ids = [int(i) for i in msg.text.split()]
             conn = get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT username FROM users WHERE user_id=?", (user_id,))
-            row = cursor.fetchone()
+            text = ""
+            for user_id in ids:
+                cursor.execute("SELECT score FROM users WHERE user_id=?", (user_id,))
+                row = cursor.fetchone()
+                if row:
+                    text += f"ID {user_id} — Ball: {row[0]}\n"
+                else:
+                    text += f"ID {user_id} — ❌ topilmadi\n"
             conn.close()
-            if row:
-                bot.send_message(msg.chat.id, f"ID {user_id} — Username: {row[0]}")
-            else:
-                bot.send_message(msg.chat.id, "❌ Bunday user topilmadi")
+            bot.send_message(msg.chat.id, text)
         except ValueError:
-            bot.send_message(msg.chat.id, "❌ Noto‘g‘ri ID")
+            bot.send_message(msg.chat.id, "❌ Noto‘g‘ri ID, faqat raqam kiriting")
 
     # Chiqish
     @bot.message_handler(func=lambda m: m.text == "⬅️ Chiqish")
