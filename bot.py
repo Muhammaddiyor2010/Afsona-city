@@ -5,8 +5,12 @@ from db import *
 from rating import *
 from reportlab.pdfgen import canvas
 from rating import get_top_100, get_active_users, generate_rating_pdf
+from admin import admin_start, admin_handlers
 
+admin_start(bot)
+admin_handlers(bot)
 
+    
 bot = telebot.TeleBot(TOKEN)
 user_referrals = {}
 
@@ -138,19 +142,6 @@ def my_score(msg):
     bot.send_message(msg.chat.id, f"💰 Sizning balingiz: {get_score(msg.from_user.id)}")
 
 
-# 🔹 Admin
-@bot.message_handler(commands=["admin"])
-def admin(msg):
-    bot.send_message(msg.chat.id, "🔑 Parolni kiriting")
-    bot.register_next_step_handler(msg, check_admin)
-
-
-def check_admin(msg):
-    if msg.text == ADMIN_PASSWORD:
-        kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        kb.add("🏆 Top 100", "📄 PDF chiqarish")
-        bot.send_message(msg.chat.id, "👑 Admin panel", reply_markup=kb)
-
 
 # 🔹 Top 100
 @bot.message_handler(func=lambda m: m.text == "🏆 Top 100")
@@ -178,17 +169,7 @@ def guide(msg):
     )
 
 
-# 🔹 PDF
-@bot.message_handler(func=lambda m: m.text == "📄 PDF chiqarish")
-def pdf(msg):
-    data = get_active_users()
-    pdf = canvas.Canvas("rating.pdf")
-    y = 800
-    for i, u in enumerate(data, 1):
-        pdf.drawString(50, y, f"{i}. {u[0]} — {u[1]} ball")
-        y -= 20
-    pdf.save()
-    bot.send_document(msg.chat.id, open("rating.pdf", "rb"))
+
 
 
 # 🔹 Infinity polling (409 xatoni oldini olish uchun)
