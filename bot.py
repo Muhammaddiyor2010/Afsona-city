@@ -5,15 +5,13 @@ from db import *
 from rating import *
 from reportlab.pdfgen import canvas
 from rating import admin_start, admin_handlers
-
-admin_start(bot)
-admin_handlers(bot)
-
-
     
 bot = telebot.TeleBot(TOKEN)
 user_referrals = {}
 
+
+admin_start(bot)
+admin_handlers(bot)
 
 # 🔹 Kanalga obuna tekshirish
 def check_sub(user_id):
