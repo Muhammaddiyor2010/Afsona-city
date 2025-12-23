@@ -234,6 +234,48 @@ def exit_admin(msg):
     ADMIN_SESSIONS.discard(msg.from_user.id)
     bot.send_message(msg.chat.id, "🚪 Admin paneldan chiqildi", reply_markup=types.ReplyKeyboardRemove())
 
+
+
+
+# --- 🔍 ID ORQALI INFO OLISH (TELEFON RAQAM BILAN) ---
+    @bot.message_handler(func=lambda m: m.text == "🔍 ID orqali Info")
+    def ask_id_for_info(msg):
+        if not is_admin(msg.from_user.id): return
+        bot.send_message(msg.chat.id, "🆔 Ma'lumotlarini (va raqamini) bilmoqchi bo'lgan foydalanuvchi ID sini kiriting:")
+        bot.register_next_step_handler(msg, get_user_info_by_id)
+
+    def get_user_info_by_id(msg):
+        target_id = msg.text.strip()
+        if not target_id.isdigit():
+            bot.send_message(msg.chat.id, "❌ Xato! ID faqat raqamlardan iborat bo'lishi kerak.")
+            return
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        # Bazadan barcha kerakli ma'lumotlarni, ayniqsa 'phone' ni olamiz
+        cursor.execute("SELECT username, phone, score FROM users WHERE user_id=?", (target_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            username, phone, score = row
+            # Agar telefon raqami bazada bo'lsa uni ko'rsatamiz, bo'lmasa xabar beramiz
+            phone_display = f"<code>{phone}</code>" if phone else "⚠️ Raqam kiritilmagan"
+            
+            text = (
+                f"👤 <b>Foydalanuvchi ma'lumotlari:</b>\n\n"
+                f"🆔 ID: <code>{target_id}</code>\n"
+                f"📞 <b>Telefon:</b> {phone_display}\n"
+                f"🔗 Username: @{username if username else 'Mavjud emas'}\n"
+                f"💎 Ball: {score}"
+            )
+            bot.send_message(msg.chat.id, text, parse_mode="HTML")
+        else:
+            bot.send_message(msg.chat.id, "❌ Kechirasiz, ushbu ID bilan foydalanuvchi bazadan topilmadi.")
+
+
+
+
 # Botni ishga tushirish
 if __name__ == "__main__":
     print("Bot ishga tushdi...")
