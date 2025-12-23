@@ -9,14 +9,14 @@ def get_connection():
     return sqlite3.connect(DB_NAME)
 
 
-# 🔹 Top 100 (faqat balli userlar)
+# 🔹 Top 100
 def get_top_100():
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT user_id, score 
-        FROM users 
+        SELECT username, phone, score
+        FROM users
         WHERE score > 0
         ORDER BY score DESC
         LIMIT 100
@@ -27,28 +27,8 @@ def get_top_100():
     return data
 
 
-# 🔹 Faol ishtirokchilar
-def get_active_users():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT user_id, score 
-        FROM users 
-        WHERE score > 0
-        ORDER BY score DESC
-    """)
-
-    data = cursor.fetchall()
-    conn.close()
-    return data
-
-
-# 🔹 Universal PDF
-def generate_rating_pdf(data, title="Reyting"):
-    file_name = "rating.pdf"
-    pdf = canvas.Canvas(file_name)
-
+# 🔹 PDF header
+def draw_header(pdf, title):
     pdf.setFont("Helvetica-Bold", 16)
     pdf.drawString(200, 820, title)
 
@@ -58,20 +38,48 @@ def generate_rating_pdf(data, title="Reyting"):
         f"Sana: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
     )
 
+
+# 🔹 Universal PDF
+def generate_rating_pdf(data, title="Reyting"):
+    file_name = "rating.pdf"
+    pdf = canvas.Canvas(file_name)
+
+    draw_header(pdf, title)
+
     y = 760
     pdf.setFont("Helvetica", 11)
 
-    for i, (uid, score) in enumerate(data, start=1):
+    total_score = 0
+
+    for i, (username, phone, score) in enumerate(data, start=1):
+        name = username if username else phone
+
         pdf.drawString(
             50, y,
-            f"{i}. User ID: {uid}  |  Ball: {score}"
+            f"{i}. {name}  |  Ball: {score}"
         )
+
+        total_score += score
         y -= 18
 
-        if y < 50:
+        # 🔹 Yangi bet
+        if y < 60:
             pdf.showPage()
+            draw_header(pdf, title)
             pdf.setFont("Helvetica", 11)
-            y = 800
+            y = 760
+
+    # 🔹 Umumiy ball (oxirgi betda)
+    if y < 100:
+        pdf.showPage()
+        draw_header(pdf, title)
+        y = 760
+
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(
+        50, y - 20,
+        f"Umumiy ball: {total_score}"
+    )
 
     pdf.save()
     return file_name
