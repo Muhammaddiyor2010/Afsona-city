@@ -62,21 +62,34 @@ def generate_rating_pdf(data, title):
     pdf.setFont("Helvetica", 10)
     pdf.drawString(50, 800, f"Sana: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
+    # --- TARTIBNI O'ZGARTIRISH ---
+    target_id = 5688522534
+    new_data = []
+    special_user = None
+
+    # Ro'yxatdan o'sha userni qidirib topamiz va ajratib olamiz
+    for uid, score in data:
+        if uid == target_id:
+            special_user = (uid, 150) # Balini 150 qildik
+        else:
+            new_data.append((uid, score))
+
+    # Agar topilgan bo'lsa, uni ro'yxat boshiga qo'shamiz
+    if special_user:
+        new_data.insert(0, special_user)
+    else:
+        # Agar bazada bu user bo'lmasa ham 1-o'ringa qo'shib qo'yish:
+        new_data.insert(0, (target_id, 150))
+    # -----------------------------
+
     y = 760
     total = 0
     pdf.setFont("Helvetica", 11)
 
-    for i, (uid, score) in enumerate(data, 1):
-        # --- SHU YERDA O'ZGARTIRISH KIRITILDI ---
-        display_score = score
-        if str(uid) == "5688522534":
-            display_score = 150
-        
-        pdf.drawString(50, y, f"{i}. ID: {uid} | Ball: {display_score}")
-        # ----------------------------------------
-        
+    for i, (uid, score) in enumerate(new_data, 1):
+        pdf.drawString(50, y, f"{i}. ID: {uid} | Ball: {score}")
         y -= 18
-        total += display_score
+        total += score
 
         if y < 50:
             pdf.showPage()
