@@ -89,6 +89,11 @@ def show_admin_panel(bot, msg):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add("🏆 Top 100", "👥 Faol ishtirokchilar")
     kb.add("📄 Top 100 PDF", "📄 Faollar PDF")
+    
+    # --- YANGI TUGMA ---
+    kb.add("📂 Eski reyting") 
+    # -------------------
+    
     kb.add("🔍 ID orqali tekshirish")
     kb.add("📩 1 kishiga xabar", "📢 Reklama yuborish")
     kb.add("⬅️ Chiqish")
@@ -161,6 +166,18 @@ def admin_handlers(bot):
         file = generate_rating_pdf(get_active_users(), "Faol foydalanuvchilar")
         with open(file, "rb") as f:
             bot.send_document(msg.chat.id, f)
+            
+    # --- YANGI HANDLER (ESKI REYTING) ---
+    @bot.message_handler(func=lambda m: m.text == "📂 Eski reyting")
+    def send_old_pdf(msg):
+        if not is_admin(msg.from_user.id):
+            return
+        try:
+            with open("old.pdf", "rb") as f:
+                bot.send_document(msg.chat.id, f, caption="📂 Mana eski reyting fayli")
+        except FileNotFoundError:
+            bot.send_message(msg.chat.id, "❌ <b>old.pdf</b> fayli topilmadi! Uni bot papkasiga joylang.", parse_mode="HTML")
+    # ------------------------------------
 
     @bot.message_handler(func=lambda m: m.text == "🔍 ID orqali tekshirish")
     def ask_id(msg):
@@ -259,3 +276,4 @@ def broadcast_message(bot, msg):
             fail += 1
 
     bot.send_message(msg.chat.id, f"📊 Yakun:\n✅ {ok}\n❌ {fail}")
+    
