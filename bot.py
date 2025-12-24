@@ -72,7 +72,7 @@ def start(msg):
     if user_exists(user_id):
         menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
         menu.add("🔗 Mening havolam", "💰 Mening hisobim")
-        menu.add("📘 Qo‘llanma", "🏆 Top 100")
+        menu.add("📘 Qo‘llanma")
         bot.send_message(msg.chat.id, "✅ Siz allaqachon ro‘yxatdan o‘tgansiz", reply_markup=menu)
         return
 
