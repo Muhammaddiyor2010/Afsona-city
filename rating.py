@@ -5,12 +5,10 @@ from telebot import types
 
 DB_NAME = "users.db"
 
-ADMIN_PHONES = [
-    "+998931981793",
-    "+998200050252",
-    "+998908551141"
-]
+# 🔐 ADMIN KOD
+ADMIN_CODE = "123455"
 
+# Admin sessiyalar
 ADMIN_SESSIONS = set()
 
 
@@ -22,13 +20,15 @@ def get_connection():
 def get_top_100():
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(
+        """
         SELECT user_id, score
         FROM users
         WHERE score > 0
         ORDER BY score DESC
         LIMIT 100
-    """)
+    """
+    )
     data = cur.fetchall()
     conn.close()
     return data
@@ -37,12 +37,14 @@ def get_top_100():
 def get_active_users():
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(
+        """
         SELECT user_id, score
         FROM users
         WHERE score > 0
         ORDER BY score DESC
-    """)
+    """
+    )
     data = cur.fetchall()
     conn.close()
     return data
@@ -78,7 +80,7 @@ def generate_rating_pdf(data, title):
     return file_name
 
 
-# ================= ADMIN =================
+# ================= ADMIN CORE =================
 def is_admin(user_id):
     return user_id in ADMIN_SESSIONS
 
@@ -92,38 +94,28 @@ def show_admin_panel(bot, msg):
     kb.add("⬅️ Chiqish")
 
     bot.send_message(
-        msg.chat.id,
-        "🛠 <b>Admin panel</b>",
-        reply_markup=kb,
-        parse_mode="HTML"
+        msg.chat.id, "🛠 <b>Admin panel</b>", reply_markup=kb, parse_mode="HTML"
     )
 
 
+# ================= ADMIN LOGIN (KODLI) =================
 def admin_start(bot):
+
     @bot.message_handler(commands=["admin"])
     def admin_login(msg):
-        kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-        kb.add(types.KeyboardButton("📞 Telefon yuborish", request_contact=True))
-        bot.send_message(
-            msg.chat.id,
-            "🔐 Admin panelga kirish uchun telefon raqamingizni yuboring",
-            reply_markup=kb
-        )
-
-    @bot.message_handler(content_types=["contact"])
-    def check_admin(msg):
-        phone = msg.contact.phone_number
-        if phone.startswith("998"):
-            phone = "+" + phone
-
-        if phone in ADMIN_PHONES:
-            ADMIN_SESSIONS.add(msg.from_user.id)
-            show_admin_panel(bot, msg)
-        else:
-            bot.send_message(msg.chat.id, "❌ Siz admin emassiz")
+        bot.send_message(msg.chat.id, "🔐 Admin panelga kirish uchun kodni kiriting:")
+        bot.register_next_step_handler(msg, lambda m: check_admin_code(bot, m))
 
 
-# ================= HANDLERS =================
+def check_admin_code(bot, msg):
+    if msg.text == ADMIN_CODE:
+        ADMIN_SESSIONS.add(msg.from_user.id)
+        show_admin_panel(bot, msg)
+    else:
+        bot.send_message(msg.chat.id, "❌ Kod noto‘g‘ri")
+
+
+# ================= ADMIN HANDLERS =================
 def admin_handlers(bot):
 
     @bot.message_handler(func=lambda m: m.text == "🏆 Top 100")
@@ -141,7 +133,6 @@ def admin_handlers(bot):
 
         bot.send_message(msg.chat.id, text, parse_mode="HTML")
 
-
     @bot.message_handler(func=lambda m: m.text == "👥 Faol ishtirokchilar")
     def active_users(msg):
         if not is_admin(msg.from_user.id):
@@ -155,7 +146,6 @@ def admin_handlers(bot):
 
         bot.send_message(msg.chat.id, text, parse_mode="HTML")
 
-
     @bot.message_handler(func=lambda m: m.text == "📄 Top 100 PDF")
     def top_pdf(msg):
         if not is_admin(msg.from_user.id):
@@ -163,7 +153,6 @@ def admin_handlers(bot):
         file = generate_rating_pdf(get_top_100(), "Top 100 Reyting")
         with open(file, "rb") as f:
             bot.send_document(msg.chat.id, f)
-
 
     @bot.message_handler(func=lambda m: m.text == "📄 Faollar PDF")
     def active_pdf(msg):
@@ -173,14 +162,12 @@ def admin_handlers(bot):
         with open(file, "rb") as f:
             bot.send_document(msg.chat.id, f)
 
-
     @bot.message_handler(func=lambda m: m.text == "🔍 ID orqali tekshirish")
     def ask_id(msg):
         if not is_admin(msg.from_user.id):
             return
-        bot.send_message(msg.chat.id, "ID kiriting:")
+        bot.send_message(msg.chat.id, "🆔 User ID kiriting:")
         bot.register_next_step_handler(msg, lambda m: find_user_info(bot, m))
-
 
     @bot.message_handler(func=lambda m: m.text == "📩 1 kishiga xabar")
     def one_user(msg):
@@ -189,14 +176,12 @@ def admin_handlers(bot):
         bot.send_message(msg.chat.id, "👤 User ID kiriting:")
         bot.register_next_step_handler(msg, ask_single_message)
 
-
     @bot.message_handler(func=lambda m: m.text == "📢 Reklama yuborish")
     def broadcast(msg):
         if not is_admin(msg.from_user.id):
             return
         bot.send_message(msg.chat.id, "📢 Reklama xabarini yuboring")
         bot.register_next_step_handler(msg, lambda m: broadcast_message(bot, m))
-
 
     @bot.message_handler(func=lambda m: m.text == "⬅️ Chiqish")
     def exit_admin(msg):
@@ -217,10 +202,12 @@ def find_user_info(bot, msg):
 
     cur.execute("PRAGMA table_info(users)")
     cols = [c[1] for c in cur.fetchall()]
+
     if "username" not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN username TEXT")
     if "phone" not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+
     conn.commit()
 
     cur.execute("SELECT username, phone FROM users WHERE user_id=?", (user_id,))
@@ -233,8 +220,7 @@ def find_user_info(bot, msg):
 
     username, phone = row
     bot.send_message(
-        msg.chat.id,
-        f"ID: {user_id}\nUsername: {username}\nTelefon: {phone}"
+        msg.chat.id, f"🆔 ID: {user_id}\n👤 Username: {username}\n📞 Telefon: {phone}"
     )
 
 
@@ -246,10 +232,7 @@ def ask_single_message(msg):
         return
 
     msg.bot.send_message(msg.chat.id, "✍️ Xabar yuboring")
-    msg.bot.register_next_step_handler(
-        msg,
-        lambda m: send_single(msg.bot, m, uid)
-    )
+    msg.bot.register_next_step_handler(msg, lambda m: send_single(msg.bot, m, uid))
 
 
 def send_single(bot, msg, user_id):
@@ -275,7 +258,4 @@ def broadcast_message(bot, msg):
         except:
             fail += 1
 
-    bot.send_message(
-        msg.chat.id,
-        f"📊 Yakun:\n✅ {ok}\n❌ {fail}"
-    )
+    bot.send_message(msg.chat.id, f"📊 Yakun:\n✅ {ok}\n❌ {fail}")
