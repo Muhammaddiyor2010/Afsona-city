@@ -2,7 +2,7 @@ import telebot
 from telebot import types
 import PyPDF2  # PDF o'qish uchun
 import re      # ID va Ballni ajratib olish uchun
-from config import *
+from config import * # Bu yerda TOKEN va ADMIN_ID bo'lishi shart
 from db import *
 from rating import *
 
@@ -20,7 +20,6 @@ def get_score_from_pdf(user_id):
             for page in reader.pages:
                 full_text += page.extract_text()
             
-            # PDF formati: "ID: 1234567 | Ball: 50" shuni qidiradi
             pattern = rf"ID:\s*{user_id}\s*\|\s*Ball:\s*(\d+)"
             match = re.search(pattern, full_text)
             
@@ -46,7 +45,6 @@ def check_sub(user_id):
 def start(msg):
     user_id = msg.from_user.id
 
-    # Referral tizimi
     if len(msg.text.split()) > 1:
         try:
             user_referrals[user_id] = int(msg.text.split()[1])
@@ -82,7 +80,7 @@ def start(msg):
     kb.add(types.KeyboardButton("📞 Telefon yuborish", request_contact=True))
     bot.send_message(msg.chat.id, "📞 Telefon raqamingizni yuboring", reply_markup=kb)
 
-@bot.callback_query_handler(func=lambda c: c.data == "check")
+@bot.callback_query_handler(func=lambda call: call.data == "check")
 def check(call):
     uid = call.from_user.id
     if not check_sub(uid):
@@ -91,7 +89,6 @@ def check(call):
 
     bot.answer_callback_query(call.id, "✅ Obuna tasdiqlandi")
     
-    # Agar user obuna bo'lib qaytsa va hali ro'yxatda bo'lmasa, telefon so'rash
     if not user_exists(uid):
         kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
         kb.add(types.KeyboardButton("📞 Telefon yuborish", request_contact=True))
@@ -102,20 +99,16 @@ def phone(msg):
     uid = msg.from_user.id
     ph = msg.contact.phone_number
     
-    # 1. Bazaga qo'shish
     ref = user_referrals.get(uid)
     add_user(uid, ph, ref)
     
-    # 2. Taklif qilgan odamga ball berish
     if ref and ref != uid:
         add_score(ref)
     
     mark_joined(uid)
 
-    # 3. PDFdan eski ballarni tekshirish (ASOSIY QISM)
     old_score = get_score_from_pdf(uid)
     if old_score > 0:
-        # Ballarni tiklash (necha ball bo'lsa shuncha marta add_score chaqiriladi)
         for _ in range(old_score):
             add_score(uid)
         tiklash_matni = f"\n\n🎁 <b>Eski bazadan {old_score} ballingiz aniqlandi va hisobingizga qo'shildi!</b>"
@@ -136,7 +129,8 @@ def phone(msg):
 @bot.message_handler(func=lambda m: m.text == "🔗 Mening havolam")
 def my_link(msg):
     uid = msg.from_user.id
-    link = f"https://t.me/{bot.get_me().username}?start={uid}"
+    bot_username = bot.get_me().username
+    link = f"https://t.me/{bot_username}?start={uid}"
     text = (
         f"🔗 Sizning referal havolangiz:\n{link}\n\n"
         "Do'stlaringizni taklif qiling va sovg'alarga ega bo'ling!"
@@ -156,6 +150,15 @@ def my_score(msg):
 
 @bot.message_handler(func=lambda m: m.text == "🏆 Top 100")
 def top_100_view(msg):
+    uid = msg.from_user.id
+    
+    # --- ADMIN TEKSHIRUVI ---
+    # Bu yerda ADMIN_ID sizning telegram ID raqamingiz bo'lishi kerak (config.py ichida)
+    if uid != ADMIN_ID:
+        bot.send_message(msg.chat.id, "❌ Reytingni ko'rish faqat adminlar uchun ruxsat etilgan.")
+        return
+    # ------------------------
+
     data = get_top_100()
     if not data:
         bot.send_message(msg.chat.id, "Reyting hali shakllanmadi.")
@@ -169,9 +172,12 @@ def top_100_view(msg):
 def guide(msg):
     bot.send_message(msg.chat.id, "📖 Qo'llanma: Link orqali do'stlaringizni taklif qiling va ball yig'ing.")
 
-# Admin qismi (Siz yuborgan admin funksiyalari bu yerda ulanadi)
-admin_start(bot)
-admin_handlers(bot)
+# Admin qismlari
+try:
+    admin_start(bot)
+    admin_handlers(bot)
+except:
+    pass
 
 if __name__ == "__main__":
     print("Bot ishlamoqda...")
