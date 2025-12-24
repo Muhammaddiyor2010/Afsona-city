@@ -5,7 +5,7 @@ from telebot import types
 import telebot
 
 # Bot tokeningizni bu yerga yozing
-BOT_TOKEN = "YOUR_BOT_TOKEN"
+BOT_TOKEN = "8011686611:AAHuyfCBOPdNkQQ-hPpy7E2Ju3wZX__ExMU"
 bot = telebot.TeleBot(BOT_TOKEN)
 
 DB_NAME = "users.db"
