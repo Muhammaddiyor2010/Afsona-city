@@ -1,176 +1,205 @@
-import telebot
-from telebot import types
-from config import *
-from db import *
-from rating import *
+import sqlite3
 from reportlab.pdfgen import canvas
+from datetime import datetime
+from telebot import types
+import os
 
-    
-bot = telebot.TeleBot(TOKEN)
-user_referrals = {}
+DB_NAME = "users.db"
 
+# Adminlar ro'yxati (Format muhim emas, kod o'zi to'g'irlaydi)
+ADMIN_PHONES = [
+    "998931981793",
+    "998200050252",
+    "998908551141"
+]
 
-admin_start(bot)
-admin_handlers(bot)
+ADMIN_SESSIONS = set()
 
-# 🔹 Kanalga obuna tekshirish
-def check_sub(user_id):
-    try:
-        m = bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return m.status in ["member", "administrator", "creator"]
-    except:
-        return False
-
-
-# 🔹 /start komandasi
-@bot.message_handler(commands=["start"])
-def start(msg):
-    user_id = msg.from_user.id
-
-    # Referral
-    if len(msg.text.split()) > 1:
-        try:
-            user_referrals[user_id] = int(msg.text.split()[1])
-        except:
-            pass
-
-    text = (
-        f"Konkursga qatnashish uchun pastda so’ralgan ma’lumotlarni yuboring va aytilgan amallarni bajaring. "
-        "Onlayn taqdimot kanalga qo’shilib 📱Televizor, Muzlatgich  va boshqa sovg'alardan birini yutib oling 🎁\n"
-        "Qani kettik!!!\n\n"
-        f"Birinchi navbatda kanalga qo'shiling va Bajarildi ✅ tugmasini bosing"
-    )
-
-    # Kanalga obuna bo‘lmaganlar
-    if not check_sub(user_id):
-        kb = types.InlineKeyboardMarkup()
-        kb.add(
-            types.InlineKeyboardButton(
-                "📢 Kanalga obuna", url=f"https://t.me/{CHANNEL_USERNAME[1:]}"
-            )
+# ================= DB (BAZA) =================
+def get_connection():
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+    # Jadval yaratish
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            phone TEXT,
+            username TEXT,
+            score INTEGER DEFAULT 0,
+            referrer_id INTEGER,
+            joined_channel BOOLEAN DEFAULT 0
         )
-        kb.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check"))
-        with open("main.jpg", "rb") as photo:
-            bot.send_photo(msg.chat.id, photo, caption=text, reply_markup=kb)
-        return
+    """)
+    conn.commit()
+    return conn
 
-    # Agar user bazada bo‘lsa
+# User borligini tekshirish
+def user_exists(user_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    exists = cur.fetchone() is not None
+    conn.close()
+    return exists
+
+# User qo'shish
+def add_user(user_id, phone=None, referrer_id=None, username=None):
     if user_exists(user_id):
-        menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        menu.add("🔗 Mening havolam", "💰 Mening hisobim")
-        menu.add("📘 Qo‘llanma")
-        bot.send_message(
-            msg.chat.id, "✅ Siz allaqachon ro‘yxatdan o‘tgansiz", reply_markup=menu
-        )
+        # Agar faqat telefonni yangilash kerak bo'lsa
+        if phone:
+            conn = get_connection()
+            conn.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
+            conn.commit()
+            conn.close()
         return
 
-    # Telefon so‘rash
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO users (user_id, phone, referrer_id, username, score) VALUES (?, ?, ?, ?, 0)",
+        (user_id, phone, referrer_id, username)
+    )
+    conn.commit()
+    conn.close()
+
+# Ball qo'shish
+def add_score(user_id):
+    conn = get_connection()
+    conn.execute("UPDATE users SET score = score + 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+# Ballni olish
+def get_score(user_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT score FROM users WHERE user_id = ?", (user_id,))
+    data = cur.fetchone()
+    conn.close()
+    return data[0] if data else 0
+
+def mark_joined(user_id):
+    conn = get_connection()
+    conn.execute("UPDATE users SET joined_channel = 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+def get_top_100():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT user_id, score FROM users WHERE score > 0 ORDER BY score DESC LIMIT 100")
+    data = cur.fetchall()
+    conn.close()
+    return data
+
+def get_active_users():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT user_id, score FROM users WHERE score > 0 ORDER BY score DESC")
+    data = cur.fetchall()
+    conn.close()
+    return data
+
+# ================= PDF =================
+def generate_rating_pdf(data, title):
+    file_name = "rating.pdf"
+    p = canvas.Canvas(file_name)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(200, 800, title)
+    p.setFont("Helvetica", 10)
+    p.drawString(50, 780, f"Sana: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    
+    y = 750
+    p.setFont("Helvetica", 12)
+    for i, (uid, score) in enumerate(data, 1):
+        p.drawString(50, y, f"{i}. ID: {uid} | Ball: {score}")
+        y -= 20
+        if y < 50:
+            p.showPage()
+            y = 800
+    
+    p.save()
+    return file_name
+
+# ================= ADMIN LOGIKASI =================
+def clean_phone(phone):
+    """Raqamni tozalash faqat raqamlarni qoldirish"""
+    return "".join(filter(str.isdigit, phone))
+
+def is_admin(user_id):
+    return user_id in ADMIN_SESSIONS
+
+def show_admin_panel(bot, chat_id):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add(types.KeyboardButton("📞 Telefon yuborish", request_contact=True))
-    bot.send_message(msg.chat.id, "📞 Telefon raqamingizni yuboring", reply_markup=kb)
+    kb.add("🏆 Top 100", "👥 Faol ishtirokchilar")
+    kb.add("📄 Top 100 PDF", "📄 Faollar PDF")
+    kb.add("🔍 ID orqali tekshirish")
+    kb.add("📩 1 kishiga xabar", "📢 Reklama yuborish")
+    kb.add("⬅️ Chiqish")
+    
+    bot.send_message(chat_id, "🛠 <b>Admin panel</b>", reply_markup=kb, parse_mode="HTML")
 
-
-# 🔹 Callback check
-@bot.callback_query_handler(func=lambda c: c.data == "check")
-def check(call):
-    uid = call.from_user.id
-
-    if not check_sub(uid):
-        bot.answer_callback_query(
-            call.id, "❌ Avval kanalga obuna bo‘ling", show_alert=True
-        )
+# BU YERDA XATOLIK TUZATILDI: Handler decorator o'rniga next_step ishlatamiz
+def check_admin_login(msg, bot):
+    if not msg.contact:
+        bot.send_message(msg.chat.id, "❌ Kontakt yuborilmadi.")
         return
 
-    if not user_exists(uid):
-        ref = user_referrals.get(uid)
-        add_user(uid, None, ref)
-        if ref and ref != uid:
-            add_score(ref)
-        mark_joined(uid)
+    phone = clean_phone(msg.contact.phone_number)
+    admin_phones_clean = [clean_phone(p) for p in ADMIN_PHONES]
 
-    bot.answer_callback_query(call.id, "✅ Obuna tasdiqlandi")
+    if phone in admin_phones_clean:
+        ADMIN_SESSIONS.add(msg.from_user.id)
+        bot.send_message(msg.chat.id, "✅ Admin tasdiqlandi!")
+        show_admin_panel(bot, msg.chat.id)
+    else:
+        bot.send_message(msg.chat.id, "❌ Siz admin emassiz.", reply_markup=types.ReplyKeyboardRemove())
 
-    # Menu ko‘rsatish
-    menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    menu.add("🔗 Mening havolam", "💰 Mening hisobim")
-    menu.add("📘 Qo‘llanma")
+def admin_start(bot):
+    @bot.message_handler(commands=["admin"])
+    def admin_entry(msg):
+        kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        kb.add(types.KeyboardButton("📞 Telefon yuborish", request_contact=True))
+        bot.send_message(msg.chat.id, "🔐 Admin panelga kirish uchun telefon raqamingizni yuboring:", reply_markup=kb)
+        
+        # KEYINGI QADAMNI BELGILAYMIZ (Bu oddiy userlarga xalaqit bermaydi)
+        bot.register_next_step_handler(msg, lambda m: check_admin_login(m, bot))
 
-    bot.send_message(
-        call.message.chat.id,
-        "🎉 Tabriklaymiz! Siz konkursga muvaffaqiyatli qo‘shildingiz.",
-        reply_markup=menu,
-    )
+# ================= ADMIN HANDLERS =================
+def admin_handlers(bot):
+    @bot.message_handler(func=lambda m: m.text == "🏆 Top 100")
+    def top100_handler(msg):
+        if is_admin(msg.from_user.id):
+            data = get_top_100()
+            text = "🏆 <b>TOP 100</b>\n\n"
+            for i, (uid, score) in enumerate(data, 1):
+                text += f"{i}. <code>{uid}</code> — {score} ball\n"
+            bot.send_message(msg.chat.id, text if data else "❌ Reyting bo'sh", parse_mode="HTML")
 
+    @bot.message_handler(func=lambda m: m.text == "👥 Faol ishtirokchilar")
+    def active_handler(msg):
+        if is_admin(msg.from_user.id):
+            data = get_active_users()
+            text = "👥 <b>Faol foydalanuvchilar</b>\n\n"
+            for i, (uid, score) in enumerate(data, 1):
+                text += f"{i}. <code>{uid}</code> — {score} ball\n"
+            bot.send_message(msg.chat.id, text if data else "❌ Bo'sh", parse_mode="HTML")
 
-# 🔹 Telefon raqami
-@bot.message_handler(content_types=["contact"])
-def phone(msg):
-    add_user(msg.from_user.id, msg.contact.phone_number)
-    menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    menu.add("🔗 Mening havolam", "💰 Mening hisobim")
-    menu.add("📘 Qo‘llanma")
-    bot.send_message(msg.chat.id, "✅ Ro‘yxatdan o‘tdingiz", reply_markup=menu)
+    @bot.message_handler(func=lambda m: m.text == "📄 Top 100 PDF")
+    def pdf_top_handler(msg):
+        if is_admin(msg.from_user.id):
+            file = generate_rating_pdf(get_top_100(), "Top 100 Reyting")
+            with open(file, "rb") as f:
+                bot.send_document(msg.chat.id, f)
 
+    @bot.message_handler(func=lambda m: m.text == "📄 Faollar PDF")
+    def pdf_active_handler(msg):
+        if is_admin(msg.from_user.id):
+            file = generate_rating_pdf(get_active_users(), "Faollar")
+            with open(file, "rb") as f:
+                bot.send_document(msg.chat.id, f)
+    
+    @bot.message_handler(func=lambda m: m.text == "⬅️ Chiqish")
+    def exit_admin(msg):
+        ADMIN_SESSIONS.discard(msg.from_user.id)
+        bot.send_message(msg.chat.id, "🚪 Admin paneldan chiqildi", reply_markup=types.ReplyKeyboardRemove())
 
-# 🔹 Mening havolam
-@bot.message_handler(func=lambda m: m.text == "🔗 Mening havolam")
-def my_link(msg):
-    uid = msg.from_user.id
-    link = f"https://t.me/{bot.get_me().username}?start={uid}"
-
-    text = (
-        f"📢 🥳 Namanganliklar uchun Afsona city kompaniyasidan KATTA YANGILIK tayyorlaganmiz.\n\n"
-        "🤫 Yaqin kunlarda, aynan shu telegram kanalimizda barchasini sizlarga e'lon qilamiz.\n\n"
-        "✈️ Siz esa kanalga obuna bo'ling va barcha Namanganlik yaqinlaringizni kanalimizga taklif qiling.\n\n"
-        "Bundan tashqari kanalga odam qo’shish orqali Televizor, Muzlatgich yoki boshqa sovg’alardan birini yutib olishingiz mumkin!\n\n"
-        "Qatnashish uchun quyidagi havola orqali o’ting 👇👇👇\n"
-        f"🔗 Sizning referal havolangiz:\n{link}"
-    )
-
-    kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton("📢 Ulashish", switch_inline_query=link))
-
-    with open("main.jpg", "rb") as photo:
-        bot.send_photo(msg.chat.id, photo, caption=text, reply_markup=kb)
-
-
-# 🔹 Mening hisobim
-@bot.message_handler(func=lambda m: m.text == "💰 Mening hisobim")
-def my_score(msg):
-    bot.send_message(msg.chat.id, f"💰 Sizning balingiz: {get_score(msg.from_user.id)}")
-
-
-
-# 🔹 Top 100
-@bot.message_handler(func=lambda m: m.text == "🏆 Top 100")
-def top100(msg):
-    data = get_top_100()
-    text = "🏆 TOP 100\n\n"
-    for i, u in enumerate(data, 1):
-        text += f"{i}. {u[0]} — {u[1]} ball\n"
-    bot.send_message(msg.chat.id, text)
-
-
-# 🔹 Qo‘llanma
-@bot.message_handler(func=lambda m: m.text == "📘 Qo‘llanma")
-def guide(msg):
-    bot.send_message(
-        msg.chat.id,
-        "❓ Tanishlarni qanday qo‘shish kerak va ballar qanday hisoblanadi?\n\n"
-        "👥 Sizga berilgan shaxsiy link orqali kanalga qo‘shilgan har bir tanishingiz uchun sizga +1 ball beriladi.\n\n"
-        "📌 O‘yinni muvaffaqiyatli o‘tish uchun menyudagi bo‘limlardan yoki pastdagi tugmalardan foydalaning.\n"
-        "Faollik ko‘rsating, vazifalarni bajaring va sovg‘alarni qo‘lga kiriting! 🎁\n\n"
-        "🔗 Tanishlarni taklif qilish uchun:\n"
-        "“Mening shaxsiy linkim 🔗” tugmasini bosing va do‘stlaringiz bilan ulashing.\n\n"
-        "📑 Hisobingizni tekshirish uchun:\n"
-        "👉 “Mening hisobim 📑” tugmasini bosing va nechta tanishingiz qo‘shilganini bilib oling.",
-    )
-
-
-
-
-
-# 🔹 Infinity polling (409 xatoni oldini olish uchun)
-if __name__ == "__main__":
-    print("Bot ishga tushdi...")
-    bot.infinity_polling(skip_pending=True, timeout=60)
+    # Qo'shimcha admin funksiyalari (Broadcast va ID search) shu yerda bo'lishi mumkin...
