@@ -10,8 +10,7 @@ bot = telebot.TeleBot(TOKEN)
 user_referrals = {}
 
 
-admin_start(bot)
-admin_handlers(bot)
+
 
 # 🔹 Kanalga obuna tekshirish
 def check_sub(user_id):
@@ -167,6 +166,9 @@ def guide(msg):
     )
 
 
+# 🔐 ADMIN HANDLERLAR ENG OXIRIDA
+admin_start(bot)
+admin_handlers(bot)
 
 
 
