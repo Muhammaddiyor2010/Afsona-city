@@ -4,7 +4,7 @@ from config import *
 from db import *
 from rating import *
 from reportlab.pdfgen import canvas
-from rating import admin_start, admin_handlers
+
     
 bot = telebot.TeleBot(TOKEN)
 user_referrals = {}
