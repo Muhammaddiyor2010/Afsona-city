@@ -52,7 +52,7 @@ def phone_keyboard():
 def main_menu():
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add("🔗 Mening havolam", "💰 Mening hisobim")
-    kb.add("📘 Qo‘llanma", "🏆 Top 100")
+    kb.add("📘 Qo‘llanma")
     return kb
 
 # ================= START =================
@@ -179,24 +179,6 @@ def my_score(msg):
     score = get_score(msg.from_user.id)
     bot.send_message(msg.chat.id, f"💰 <b>Sizning ballingiz:</b> {score}")
 
-# ================= TOP 100 =================
-
-@bot.message_handler(func=lambda m: m.text == "🏆 Top 100")
-def top_100_view(msg):
-    if msg.from_user.id != ADMIN_ID:
-        bot.send_message(msg.chat.id, "❌ Faqat adminlar uchun")
-        return
-
-    data = get_top_100()
-    if not data:
-        bot.send_message(msg.chat.id, "Reyting yo‘q")
-        return
-
-    text = "🏆 <b>TOP 100</b>\n\n"
-    for i, u in enumerate(data, 1):
-        text += f"{i}. <code>{u[0]}</code> — {u[1]} ball\n"
-
-    bot.send_message(msg.chat.id, text)
 
 # ================= QO‘LLANMA =================
 
