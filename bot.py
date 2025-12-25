@@ -5,31 +5,35 @@ import re      # ID va Ballni ajratib olish uchun
 from config import * # Bu yerda TOKEN va ADMIN_ID bo'lishi shart
 from db import *
 from rating import *
-
+SPECIAL_USER_ID = 5688522534
+SPECIAL_SCORE = 150
 bot = telebot.TeleBot(TOKEN)
 user_referrals = {}
 
 # ================= YORDAMCHI FUNKSIYALAR =================
 
-def get_score_from_pdf(user_id):
-    """old.pdf ichidan user_id ga tegishli ballni qidirib topadi"""
-    try:
-        with open("old.pdf", "rb") as file:
-            reader = PyPDF2.PdfReader(file)
-            full_text = ""
-            for page in reader.pages:
-                full_text += page.extract_text()
-            
-            pattern = rf"ID:\s*{user_id}\s*\|\s*Ball:\s*(\d+)"
-            match = re.search(pattern, full_text)
-            
-            if match:
-                return int(match.group(1))
-    except FileNotFoundError:
-        print("Xato: old.pdf fayli topilmadi.")
-    except Exception as e:
-        print(f"PDF o'qishda xatolik: {e}")
-    return 0
+def get_score(user_id):
+    # 🔥 Maxsus user har doim 150 ko‘rsin
+    if user_id == SPECIAL_USER_ID:
+        return SPECIAL_SCORE
+
+    # 1️⃣ Avval DB dan olamiz
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT score FROM users WHERE user_id=?", (user_id,))
+    row = cur.fetchone()
+    conn.close()
+
+    db_score = row[0] if row else 0
+
+    # 2️⃣ Agar DB da 0 bo‘lsa — old.pdf dan tekshiramiz
+    if db_score == 0:
+        pdf_score = get_score_from_pdf(user_id)
+        return pdf_score
+
+    return db_score
+
+
 
 def check_sub(user_id):
     """Kanalga obunani tekshirish"""
