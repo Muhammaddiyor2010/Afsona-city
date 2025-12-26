@@ -11,7 +11,6 @@ ADMIN_CODE = "123455"
 # Admin sessiyalar
 ADMIN_SESSIONS = set()
 
-
 # ================= DB =================
 def get_connection():
     return sqlite3.connect(DB_NAME, check_same_thread=False)
@@ -20,15 +19,13 @@ def get_connection():
 def get_top_100():
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
-        """
+    cur.execute("""
         SELECT user_id, score
         FROM users
         WHERE score > 0
         ORDER BY score DESC
         LIMIT 100
-    """
-    )
+    """)
     data = cur.fetchall()
     conn.close()
     return data
@@ -37,50 +34,43 @@ def get_top_100():
 def get_active_users():
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(
-        """
+    cur.execute("""
         SELECT user_id, score
         FROM users
         WHERE score > 0
         ORDER BY score DESC
-    """
-    )
+    """)
     data = cur.fetchall()
     conn.close()
     return data
 
 
 # ================= PDF =================
-# ================= PDF =================
 def generate_rating_pdf(data, title):
     file_name = "rating.pdf"
     pdf = canvas.Canvas(file_name)
 
     pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawString(200, 820, title)
+    pdf.drawString(180, 820, title)
 
     pdf.setFont("Helvetica", 10)
     pdf.drawString(50, 800, f"Sana: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
-    # --- TARTIBNI O'ZGARTIRISH ---
+    # Maxsus user
     target_id = 5688522534
     new_data = []
     special_user = None
 
-    # Ro'yxatdan o'sha userni qidirib topamiz va ajratib olamiz
     for uid, score in data:
         if uid == target_id:
-            special_user = (uid, 150) # Balini 150 qildik
+            special_user = (uid, 150)
         else:
             new_data.append((uid, score))
 
-    # Agar topilgan bo'lsa, uni ro'yxat boshiga qo'shamiz
     if special_user:
         new_data.insert(0, special_user)
     else:
-        # Agar bazada bu user bo'lmasa ham 1-o'ringa qo'shib qo'yish:
         new_data.insert(0, (target_id, 150))
-    # -----------------------------
 
     y = 760
     total = 0
@@ -110,26 +100,25 @@ def show_admin_panel(bot, msg):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add("🏆 Top 100", "👥 Faol ishtirokchilar")
     kb.add("📄 Top 100 PDF", "📄 Faollar PDF")
-    
-    # --- YANGI TUGMA ---
-    kb.add("📂 Eski reyting") 
-    # -------------------
-    
+    kb.add("📂 Eski reyting")
     kb.add("🔍 ID orqali tekshirish")
     kb.add("📩 1 kishiga xabar", "📢 Reklama yuborish")
     kb.add("⬅️ Chiqish")
 
     bot.send_message(
-        msg.chat.id, "🛠 <b>Admin panel</b>", reply_markup=kb, parse_mode="HTML"
+        msg.chat.id,
+        "🛠 <b>Admin panel</b>",
+        reply_markup=kb,
+        parse_mode="HTML"
     )
 
 
-# ================= ADMIN LOGIN (KODLI) =================
+# ================= ADMIN LOGIN =================
 def admin_start(bot):
 
     @bot.message_handler(commands=["admin"])
     def admin_login(msg):
-        bot.send_message(msg.chat.id, "🔐 Admin panelga kirish uchun kodni kiriting:")
+        bot.send_message(msg.chat.id, "🔐 Admin kodni kiriting:")
         bot.register_next_step_handler(msg, lambda m: check_admin_code(bot, m))
 
 
@@ -159,6 +148,7 @@ def admin_handlers(bot):
 
         bot.send_message(msg.chat.id, text, parse_mode="HTML")
 
+
     @bot.message_handler(func=lambda m: m.text == "👥 Faol ishtirokchilar")
     def active_users(msg):
         if not is_admin(msg.from_user.id):
@@ -172,6 +162,7 @@ def admin_handlers(bot):
 
         bot.send_message(msg.chat.id, text, parse_mode="HTML")
 
+
     @bot.message_handler(func=lambda m: m.text == "📄 Top 100 PDF")
     def top_pdf(msg):
         if not is_admin(msg.from_user.id):
@@ -180,6 +171,7 @@ def admin_handlers(bot):
         with open(file, "rb") as f:
             bot.send_document(msg.chat.id, f)
 
+
     @bot.message_handler(func=lambda m: m.text == "📄 Faollar PDF")
     def active_pdf(msg):
         if not is_admin(msg.from_user.id):
@@ -187,18 +179,18 @@ def admin_handlers(bot):
         file = generate_rating_pdf(get_active_users(), "Faol foydalanuvchilar")
         with open(file, "rb") as f:
             bot.send_document(msg.chat.id, f)
-            
-    # --- YANGI HANDLER (ESKI REYTING) ---
+
+
     @bot.message_handler(func=lambda m: m.text == "📂 Eski reyting")
-    def send_old_pdf(msg):
+    def old_rating(msg):
         if not is_admin(msg.from_user.id):
             return
         try:
             with open("old.pdf", "rb") as f:
-                bot.send_document(msg.chat.id, f, caption="📂 Mana eski reyting fayli")
-        except FileNotFoundError:
-            bot.send_message(msg.chat.id, "❌ <b>old.pdf</b> fayli topilmadi! Uni bot papkasiga joylang.", parse_mode="HTML")
-    # ------------------------------------
+                bot.send_document(msg.chat.id, f)
+        except:
+            bot.send_message(msg.chat.id, "❌ old.pdf topilmadi")
+
 
     @bot.message_handler(func=lambda m: m.text == "🔍 ID orqali tekshirish")
     def ask_id(msg):
@@ -207,6 +199,7 @@ def admin_handlers(bot):
         bot.send_message(msg.chat.id, "🆔 User ID kiriting:")
         bot.register_next_step_handler(msg, lambda m: find_user_info(bot, m))
 
+
     @bot.message_handler(func=lambda m: m.text == "📩 1 kishiga xabar")
     def one_user(msg):
         if not is_admin(msg.from_user.id):
@@ -214,12 +207,14 @@ def admin_handlers(bot):
         bot.send_message(msg.chat.id, "👤 User ID kiriting:")
         bot.register_next_step_handler(msg, ask_single_message)
 
+
     @bot.message_handler(func=lambda m: m.text == "📢 Reklama yuborish")
     def broadcast(msg):
         if not is_admin(msg.from_user.id):
             return
-        bot.send_message(msg.chat.id, "📢 Reklama xabarini yuboring")
+        bot.send_message(msg.chat.id, "📢 Reklama xabarini yuboring:")
         bot.register_next_step_handler(msg, lambda m: broadcast_message(bot, m))
+
 
     @bot.message_handler(func=lambda m: m.text == "⬅️ Chiqish")
     def exit_admin(msg):
@@ -232,33 +227,24 @@ def find_user_info(bot, msg):
     try:
         user_id = int(msg.text)
     except:
-        bot.send_message(msg.chat.id, "❌ ID noto‘g‘ri")
+        bot.send_message(msg.chat.id, "❌ ID xato")
         return
 
     conn = get_connection()
     cur = conn.cursor()
-
-    cur.execute("PRAGMA table_info(users)")
-    cols = [c[1] for c in cur.fetchall()]
-
-    if "username" not in cols:
-        cur.execute("ALTER TABLE users ADD COLUMN username TEXT")
-    if "phone" not in cols:
-        cur.execute("ALTER TABLE users ADD COLUMN phone TEXT")
-
-    conn.commit()
 
     cur.execute("SELECT username, phone FROM users WHERE user_id=?", (user_id,))
     row = cur.fetchone()
     conn.close()
 
     if not row:
-        bot.send_message(msg.chat.id, "❌ Bunday ID yo‘q")
+        bot.send_message(msg.chat.id, "❌ User topilmadi")
         return
 
     username, phone = row
     bot.send_message(
-        msg.chat.id, f"🆔 ID: {user_id}\n👤 Username: {username}\n📞 Telefon: {phone}"
+        msg.chat.id,
+        f"🆔 ID: {user_id}\n👤 Username: {username}\n📞 Telefon: {phone}"
     )
 
 
@@ -269,8 +255,10 @@ def ask_single_message(msg):
         msg.bot.send_message(msg.chat.id, "❌ ID xato")
         return
 
-    msg.bot.send_message(msg.chat.id, "✍️ Xabar yuboring")
-    msg.bot.register_next_step_handler(msg, lambda m: send_single(msg.bot, m, uid))
+    msg.bot.send_message(msg.chat.id, "✍️ Xabar yuboring:")
+    msg.bot.register_next_step_handler(
+        msg, lambda m: send_single(msg.bot, m, uid)
+    )
 
 
 def send_single(bot, msg, user_id):
@@ -296,5 +284,7 @@ def broadcast_message(bot, msg):
         except:
             fail += 1
 
-    bot.send_message(msg.chat.id, f"📊 Yakun:\n✅ {ok}\n❌ {fail}")
-    
+    bot.send_message(
+        msg.chat.id,
+        f"📊 Yakun:\n✅ Yuborildi: {ok}\n❌ Xato: {fail}"
+    )
